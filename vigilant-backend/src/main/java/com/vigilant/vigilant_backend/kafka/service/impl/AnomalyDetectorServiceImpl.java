@@ -51,14 +51,19 @@ public class AnomalyDetectorServiceImpl implements AnomalyDetectorService {
     private void analyzeBuildMetrics(TrackedRepo repo, BuildEvent event) {
         List<BuildState> last10Builds = buildStateRepository.findTop10ByRepoOrderByRunIdDesc(repo);
         
-        double avgDuration = calculateAverageDuration(last10Builds);
+        // Exclude the current run so it doesn't skew the historical data
+        List<BuildState> historicalBuilds = last10Builds.stream()
+                .filter(state -> !state.getRunId().equals(event.runId()))
+                .toList();
+
+        double avgDuration = calculateAverageDuration(historicalBuilds);
         if (avgDuration == 0) return; // Not enough data
 
         BuildMetric metric = getOrCreateBuildMetric(repo);
         metric.setAvgDurationLast10(new BigDecimal(avgDuration).setScale(2, RoundingMode.HALF_UP));
 
         checkPerformanceDegradation(repo, event, avgDuration);
-        checkFlakyPipeline(repo, event, last10Builds, metric);
+        checkFlakyPipeline(repo, event, historicalBuilds, metric);
 
         buildMetricRepository.save(metric);
     }

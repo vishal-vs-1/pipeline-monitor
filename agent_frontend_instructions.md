@@ -5,6 +5,7 @@ These instructions govern how you (Gemini AI) should approach building the Vigil
 ## Project Structure & Separation of Concerns
 
 ### Frontend (Angular)
+- **Component Separation**: Separate HTML defined in TS files into their own `.html` files. All unique components are to be stored in the `src/app/components` folder.
 - **Feature Modules / Standalone Components**: Group related components by feature (e.g., `dashboard`, `config`).
 - **Core Module (`src/app/core`)**: Singleton services, interceptors, and guards.
 - **Shared Module (`src/app/shared`)**: Reusable UI components, directives, and pipes.
