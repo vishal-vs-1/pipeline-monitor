@@ -1,0 +1,46 @@
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*.iml
+.project
+.classpath
+.settings/
+
+# Node.js / Angular
+node_modules/
+dist/
+tmp/
+out-tsc/
+.angular/
+npm-debug.log
+yarn-error.log
+
+# Java / Spring Boot
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+.mvn/
+!/.mvn/wrapper/maven-wrapper.jar
+!/.mvn/wrapper/maven-wrapper.properties
+
+# Environment Variables
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+.env.*
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

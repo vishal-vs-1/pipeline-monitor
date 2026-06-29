@@ -1,0 +1,70 @@
+import { Component, OnInit, OnDestroy, signal } from '@angular/core';
+import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
+import { CommonModule } from '@angular/common';
+import { WebsocketService } from './services/websocket.service';
+import { Subscription } from 'rxjs';
+
+@Component({
+  selector: 'app-root',
+  standalone: true,
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, CommonModule],
+  template: `
+    <div class="drawer lg:drawer-open">
+      <input id="my-drawer-2" type="checkbox" class="drawer-toggle" />
+      <div class="drawer-content flex flex-col items-center justify-start min-h-screen bg-base-200 relative">
+        <!-- Page content here -->
+        <label for="my-drawer-2" class="btn btn-primary drawer-button lg:hidden m-4 self-start">Open menu</label>
+        <div class="w-full">
+            <router-outlet></router-outlet>
+        </div>
+        
+        <!-- Toast Container -->
+        <div class="toast toast-bottom toast-end z-50">
+            <div *ngFor="let alert of alerts" class="alert shadow-lg mb-2" [ngClass]="alert.message.includes('Critical') ? 'alert-error' : 'alert-warning'">
+                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                <span>{{ alert.message }}</span>
+                <button class="btn btn-sm btn-ghost" (click)="removeAlert(alert)">✕</button>
+            </div>
+        </div>
+
+      </div> 
+      <div class="drawer-side">
+        <label for="my-drawer-2" aria-label="close sidebar" class="drawer-overlay"></label> 
+        <ul class="menu p-4 w-80 min-h-full bg-base-100 text-base-content border-r border-base-300">
+          <li class="mb-4">
+            <h2 class="text-2xl font-bold px-4 text-primary tracking-wider">VIGILANT</h2>
+          </li>
+          <li><a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}">Dashboard</a></li>
+          <li><a routerLink="/config" routerLinkActive="active">Configuration</a></li>
+        </ul>
+      
+      </div>
+    </div>
+  `,
+  styles: []
+})
+export class App implements OnInit, OnDestroy {
+  protected readonly title = signal('vigilant-frontend');
+  alerts: any[] = [];
+  private subs = new Subscription();
+
+  constructor(private wsService: WebsocketService) {}
+
+  ngOnInit() {
+    this.subs.add(
+      this.wsService.alerts$.subscribe(alert => {
+        this.alerts.push(alert);
+        // Auto remove after 5 seconds
+        setTimeout(() => this.removeAlert(alert), 5000);
+      })
+    );
+  }
+
+  ngOnDestroy() {
+    this.subs.unsubscribe();
+  }
+
+  removeAlert(alert: any) {
+    this.alerts = this.alerts.filter(a => a !== alert);
+  }
+}
