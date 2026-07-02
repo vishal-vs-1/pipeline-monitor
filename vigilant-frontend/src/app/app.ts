@@ -13,28 +13,15 @@ import { Subscription } from 'rxjs';
 })
 export class App implements OnInit, OnDestroy {
   protected readonly title = signal('vigilant-frontend');
-  alerts: any[] = [];
   private subs = new Subscription();
 
-  constructor(private wsService: WebsocketService, private cdr: ChangeDetectorRef) {}
+  constructor(private wsService: WebsocketService) {}
 
   ngOnInit() {
-    this.subs.add(
-      this.wsService.alerts$.subscribe(alert => {
-        console.log("Received alert from WebSocket!", alert);
-        this.alerts.push(alert);
-        this.cdr.detectChanges();
-        // Toasts will remain on screen until manually dismissed by the user
-      })
-    );
+    // Other subscriptions can go here if needed in the future
   }
 
   ngOnDestroy() {
     this.subs.unsubscribe();
-  }
-
-  removeAlert(alert: any) {
-    this.alerts = this.alerts.filter(a => a !== alert);
-    this.cdr.detectChanges();
   }
 }

@@ -18,6 +18,7 @@ These instructions govern how you (Gemini AI) should approach building the Vigil
 - **Lombok Injection**: Manual constructors are strictly prohibited. Use Lombok's `@RequiredArgsConstructor` everywhere for dependency injection.
 - **Entity Boilerplate**: Entities MUST use Lombok `@Getter`, `@Setter`, and `@NoArgsConstructor`. Do not write manual getters, setters, or default constructors.
 - **Data Transfer Objects (DTOs)**: All DTOs MUST be implemented as Java `record`s to ensure simplicity and immutability. Do not use classes or Lombok for DTOs.
+- Do not use fully qualified class names directly in code/annotations (e.g., `@jakarta.validation.constraints.Min`). Instead, place the import statement at the top of the file (e.g., `import jakarta.validation.constraints.Min;`) and use the simple name (`@Min`).
 
 ### Security & Configuration Rules
 - **No Duplicate Configurations**: Do not duplicate configurations across the application. For example, if global CORS is defined in `WebConfig`, do not use `@CrossOrigin` on individual controllers.
@@ -34,3 +35,33 @@ These instructions govern how you (Gemini AI) should approach building the Vigil
 - **Strict Typing**: Leverage Java 25 strictly. Use modern Java features (records for DTOs, switch expressions, var where appropriate but readable).
 - **Error Handling**: Implement global exception handlers (`@ControllerAdvice`). Do not swallow exceptions; log them appropriately.
 - **Workflow & Commits**: Always ensure the code compiles and tests pass before proposing it to the user. Add comments explaining *why* a certain approach was taken if it involves complex logic.
+
+
+
+
+
+
+
+
+
+
+# Gemini AI Instructions & Best Practices (Frontend)
+
+These instructions govern how you (Gemini AI) should approach building the Vigilant CI/CD monitoring tool Frontend.
+
+## Project Structure & Separation of Concerns
+
+### Frontend (Angular)
+- **Component Separation**: Separate HTML defined in TS files into their own `.html` files. All unique components are to be stored in the `src/app/components` folder.
+- **Feature Modules / Standalone Components**: Group related components by feature (e.g., `dashboard`, `config`).
+- **Core Module (`src/app/core`)**: Singleton services, interceptors, and guards.
+- **Shared Module (`src/app/shared`)**: Reusable UI components, directives, and pipes.
+- **Services**: UI components should strictly handle presentation. Data fetching, state management, and WebSocket communication must happen in dedicated Angular services.
+- **Styling**: Use Tailwind CSS utility classes directly in templates for standard layouts, and daisyUI for complex components (buttons, cards, modals). Avoid writing custom vanilla CSS unless strictly necessary for custom micro-animations.
+
+## Coding Best Practices
+- **Strict Typing**: Leverage TypeScript strictly. Avoid using `any`.
+- **Error Handling**: Implement a Global Error Handler and Interceptors for HTTP calls.
+- **Asynchronous Operations**: Handle RxJS subscriptions carefully (use `takeUntil`, `AsyncPipe`, or Signals) to avoid memory leaks.
+- **Aesthetics & UI/UX**: The UI must feel premium. Utilize daisyUI's elegant themes, smooth transitions, and ensure it is fully responsive. Never leave placeholders or unstyled native HTML elements.
+- **Workflow & Commits**: Ensure components render correctly without errors before proceeding. Add comments for complex UI state management logic.

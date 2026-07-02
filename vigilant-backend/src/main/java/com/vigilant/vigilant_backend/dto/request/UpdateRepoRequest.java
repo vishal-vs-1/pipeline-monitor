@@ -4,15 +4,15 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.NotNull;
 import com.vigilant.vigilant_backend.entity.TrackedRepo;
 
-public record AddRepoRequest(
+public record UpdateRepoRequest(
     @NotBlank(message = "{validation.repo.name.required}")
     @Pattern(regexp = "^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$", message = "{validation.repo.name.pattern}")
     String repoName,
 
-    @NotBlank(message = "{validation.github.token.required}")
-    String githubToken,
+    String githubToken, // Optional during update
 
     @NotBlank(message = "{validation.branch.required}")
     @Pattern(regexp = "^[a-zA-Z0-9_.-]+$", message = "{validation.branch.pattern}")
@@ -24,21 +24,8 @@ public record AddRepoRequest(
 
     @Min(value = 5, message = "{validation.anomaly.window.min}")
     @Max(value = 20, message = "{validation.anomaly.window.max}")
-    Integer anomalyWindowSize
-) {
-    public TrackedRepo toEntity() {
-        TrackedRepo repo = new TrackedRepo();
-        repo.setRepoName(this.repoName());
-        repo.setGithubToken(this.githubToken());
-        repo.setBranch(this.branch());
-        
-        if (this.anomalyMultiplier() != null) {
-            repo.setAnomalyMultiplier(this.anomalyMultiplier());
-        }
-        if (this.anomalyWindowSize() != null) {
-            repo.setAnomalyWindowSize(this.anomalyWindowSize());
-        }
-        
-        return repo;
-    }
-}
+    Integer anomalyWindowSize,
+    
+    @NotNull
+    Boolean isActive
+) {}

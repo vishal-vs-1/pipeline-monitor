@@ -1,5 +1,6 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { RouterModule } from '@angular/router';
 import { WebsocketService } from '../../services/websocket.service';
 import { ApiService } from '../../services/api.service';
 import { Subscription } from 'rxjs';
@@ -7,13 +8,12 @@ import { Subscription } from 'rxjs';
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, RouterModule],
   templateUrl: './dashboard.component.html',
   styles: []
 })
 export class DashboardComponent implements OnInit, OnDestroy {
-  builds: any = {};
-  repoKeys: string[] = [];
+  repoBuilds: any[] = [];
   private subs: Subscription = new Subscription();
 
   constructor(
@@ -25,11 +25,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
   ngOnInit() {
     console.log("Fetching recent builds from API...");
     this.apiService.getRecentBuilds().subscribe({
-      next: (data: any) => {
+      next: (data: any[]) => {
         console.log("SUCCESS! Received builds data:", data);
-        this.builds = data;
-        this.repoKeys = Object.keys(data);
-        console.log("Repo keys parsed:", this.repoKeys);
+        this.repoBuilds = data || [];
         this.cdr.detectChanges(); // Force UI to update
       },
       error: (err: any) => {
@@ -40,20 +38,27 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.subs.add(
       this.wsService.buildUpdates$.subscribe((update: any) => {
         console.log("WebSocket received update:", update);
-        const repoName = update.repoName;
-        if (!this.builds[repoName]) {
-          this.builds[repoName] = [];
-          this.repoKeys.push(repoName);
+        
+        let existingRepo = this.repoBuilds.find(r => r.repoId === update.repoId);
+        
+        if (!existingRepo) {
+           // Basic parsing for new repos from WebSocket event
+           const branchMatch = update.repoName.match(/\((.*?)\)/);
+           const branch = branchMatch ? branchMatch[1] : '';
+           const name = update.repoName.split(' ')[0];
+           
+           existingRepo = { repoId: update.repoId, repoName: name, branch: branch, builds: [] };
+           this.repoBuilds.push(existingRepo);
         }
         
         // Update existing or add new
-        const existingIdx = this.builds[repoName].findIndex((b: any) => b.runId === update.runId);
+        const existingIdx = existingRepo.builds.findIndex((b: any) => b.runId === update.runId);
         if (existingIdx !== -1) {
-          this.builds[repoName][existingIdx] = update;
+          existingRepo.builds[existingIdx] = update;
         } else {
-          this.builds[repoName].unshift(update);
-          if (this.builds[repoName].length > 5) {
-            this.builds[repoName].pop();
+          existingRepo.builds.unshift(update);
+          if (existingRepo.builds.length > 5) {
+            existingRepo.builds.pop();
           }
         }
         this.cdr.detectChanges(); // Force UI to update

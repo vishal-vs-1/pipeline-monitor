@@ -39,6 +39,9 @@ public class BuildState {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    @Column(name = "is_anomaly")
+    private Boolean isAnomaly = false;
+
     @PrePersist
     @PreUpdate
     public void prePersist() {

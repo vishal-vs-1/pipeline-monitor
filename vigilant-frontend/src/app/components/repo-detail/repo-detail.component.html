@@ -1,0 +1,62 @@
+<div class="p-6 max-w-4xl mx-auto min-h-screen pb-20">
+      <div class="flex items-center gap-4 mb-8 pb-6 border-b border-base-300">
+        <a routerLink="/" class="btn btn-ghost btn-sm btn-circle">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+        </a>
+        <h1 class="text-3xl font-bold text-primary flex-1">Repository History <span class="text-base font-normal text-base-content/60 ml-2">#{{repoId}}</span></h1>
+        
+        <a [routerLink]="['/config']" [queryParams]="{editRepoId: repoId}" class="btn btn-ghost btn-circle" title="Edit Repository Settings">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-base-content/70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+        </a>
+      </div>
+
+  <div class="card bg-base-100 shadow-xl border border-base-300">
+    <div class="card-body p-4 md:p-8">
+      
+      <div class="flex flex-col gap-3">
+        @for (build of builds; track build.runId) {
+          <div class="flex justify-between items-center p-4 rounded-xl transition-all duration-300"
+               [ngClass]="build.isAnomaly ? 'bg-error bg-opacity-20 border border-error text-error font-semibold shadow-sm' : 'bg-base-200 hover:bg-base-300'">
+            
+            <div class="flex items-center gap-4">
+              <span class="font-mono text-lg opacity-80">#{{ build.runId }}</span>
+              <span class="badge badge-lg" [ngClass]="getBadgeClass(build.conclusion)">
+                {{ build.conclusion || build.status }}
+              </span>
+            </div>
+
+            <div class="flex items-center gap-6">
+              <span class="text-lg opacity-70 flex items-center gap-1">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                {{ build.durationSeconds ? build.durationSeconds + 's' : '-' }}
+              </span>
+              <span class="text-sm opacity-50 hidden md:block">
+                {{ build.updatedAt | date:'medium' }}
+              </span>
+            </div>
+            
+          </div>
+        }
+        
+        @if (loading) {
+          <div class="flex justify-center p-8">
+            <span class="loading loading-spinner loading-lg text-primary"></span>
+          </div>
+        }
+        
+        @if (!loading && builds.length === 0) {
+          <div class="text-center p-12 opacity-50">
+            No builds found for this repository.
+          </div>
+        }
+        
+        @if (!loading && !hasMore && builds.length > 0) {
+          <div class="text-center p-6 opacity-40 text-sm">
+            End of history.
+          </div>
+        }
+      </div>
+
+    </div>
+  </div>
+</div>

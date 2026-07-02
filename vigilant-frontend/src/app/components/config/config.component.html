@@ -4,7 +4,7 @@
     
     <div class="card bg-base-100 shadow-xl mb-8 border border-base-300">
       <div class="card-body">
-        <h2 class="card-title mb-4">Add Tracked Repository</h2>
+        <h2 class="card-title mb-4">{{ editingRepoId ? 'Edit Tracked Repository' : 'Add Tracked Repository' }}</h2>
         <form [formGroup]="repoForm" (ngSubmit)="onSubmit()" class="flex flex-col gap-4">
           
           <label class="form-control w-full">
@@ -13,17 +13,40 @@
           </label>
 
           <label class="form-control w-full">
-            <div class="label"><span class="label-text">GitHub Personal Access Token</span></div>
+            <div class="label">
+              <span class="label-text">GitHub Personal Access Token</span>
+              <span class="label-text-alt text-base-content/60" *ngIf="editingRepoId">(Leave blank to keep unchanged)</span>
+            </div>
             <input type="password" formControlName="githubToken" placeholder="ghp_..." class="input input-bordered w-full" />
           </label>
 
-          <label class="form-control w-full">
-            <div class="label"><span class="label-text">Branch (default: main)</span></div>
-            <input type="text" formControlName="branch" placeholder="main" class="input input-bordered w-full" />
-          </label>
+          <div class="flex gap-4">
+            <label class="form-control w-full">
+              <div class="label"><span class="label-text">Branch (default: main)</span></div>
+              <input type="text" formControlName="branch" placeholder="main" class="input input-bordered w-full" />
+            </label>
+            
+            <label class="form-control flex-row items-center gap-2 mt-8" *ngIf="editingRepoId">
+              <input type="checkbox" formControlName="isActive" class="toggle toggle-primary" />
+              <span class="label-text font-medium">Active</span>
+            </label>
+          </div>
+          
+          <div class="flex gap-4">
+            <label class="form-control w-full">
+              <div class="label"><span class="label-text">Anomaly Multiplier (1.2 - 5.0)</span></div>
+              <input type="number" step="0.1" formControlName="anomalyMultiplier" class="input input-bordered w-full" />
+            </label>
+            
+            <label class="form-control w-full">
+              <div class="label"><span class="label-text">Anomaly Window (5 - 20 builds)</span></div>
+              <input type="number" formControlName="anomalyWindowSize" class="input input-bordered w-full" />
+            </label>
+          </div>
 
           <div class="card-actions justify-end mt-4">
-            <button type="submit" class="btn btn-primary" [disabled]="!repoForm.valid">Add Repository</button>
+            <button type="button" class="btn btn-ghost" *ngIf="editingRepoId" (click)="cancelEdit()">Cancel</button>
+            <button type="submit" class="btn btn-primary" [disabled]="!repoForm.valid">{{ editingRepoId ? 'Update Repository' : 'Add Repository' }}</button>
           </div>
         </form>
       </div>
@@ -37,7 +60,10 @@
             <th>ID</th>
             <th>Repository</th>
             <th>Branch</th>
+            <th>Multiplier</th>
+            <th>Window</th>
             <th>Status</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -46,10 +72,15 @@
               <td>{{ repo.id }}</td>
               <td class="font-semibold">{{ repo.repoName }}</td>
               <td><div class="badge badge-outline">{{ repo.branch }}</div></td>
+              <td>{{ repo.anomalyMultiplier }}x</td>
+              <td>{{ repo.anomalyWindowSize }} builds</td>
               <td>
                 <div class="badge" [ngClass]="repo.isActive ? 'badge-success' : 'badge-error'">
                   {{ repo.isActive ? 'Active' : 'Inactive' }}
                 </div>
+              </td>
+              <td>
+                <button class="btn btn-sm btn-outline btn-primary" (click)="editRepo(repo)">Edit</button>
               </td>
             </tr>
           }

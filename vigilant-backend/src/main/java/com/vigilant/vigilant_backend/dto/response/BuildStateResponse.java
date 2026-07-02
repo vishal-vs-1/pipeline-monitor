@@ -9,7 +9,8 @@ public record BuildStateResponse(
     String status,
     String conclusion,
     Integer durationSeconds,
-    LocalDateTime updatedAt
+    LocalDateTime updatedAt,
+    Boolean isAnomaly
 ) {
     public static BuildStateResponse fromEntity(com.vigilant.vigilant_backend.entity.BuildState state) {
         return new BuildStateResponse(
@@ -19,7 +20,8 @@ public record BuildStateResponse(
             state.getStatus(),
             state.getConclusion(),
             state.getDurationSeconds(),
-            state.getUpdatedAt()
+            state.getUpdatedAt(),
+            state.getIsAnomaly()
         );
     }
 }

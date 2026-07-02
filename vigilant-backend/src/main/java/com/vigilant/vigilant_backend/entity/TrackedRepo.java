@@ -28,4 +28,10 @@ public class TrackedRepo {
 
     @Column(name = "is_active")
     private Boolean isActive = true;
+
+    @Column(name = "anomaly_multiplier")
+    private Double anomalyMultiplier = 1.5;
+
+    @Column(name = "anomaly_window_size")
+    private Integer anomalyWindowSize = 10;
 }

@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import com.vigilant.vigilant_backend.dto.request.UpdateRepoRequest;
 
 @RestController
 @RequestMapping("/api/repos")
@@ -29,5 +30,13 @@ public class RepoController {
         TrackedRepo repo = request.toEntity();
         TrackedRepo savedRepo = repoService.addRepo(repo);
         return TrackedRepoResponse.fromEntity(savedRepo);
+    }
+
+    @PutMapping("/{id}")
+    public TrackedRepoResponse updateRepo(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateRepoRequest request) {
+        TrackedRepo updatedRepo = repoService.updateRepo(id, request);
+        return TrackedRepoResponse.fromEntity(updatedRepo);
     }
 }

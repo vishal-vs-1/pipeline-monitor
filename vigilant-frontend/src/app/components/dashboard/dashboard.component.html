@@ -3,15 +3,18 @@
     <h1 class="text-3xl font-bold mb-6 text-primary">Pipeline Dashboard</h1>
     
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      @for (repo of repoKeys; track repo) {
+      @for (repo of repoBuilds; track repo.repoId) {
         <div class="card bg-base-100 shadow-xl border border-base-300 hover:shadow-2xl transition-all duration-300">
           <div class="card-body">
-            <h2 class="card-title text-accent">{{ repo }}</h2>
+            <h2 class="card-title text-accent hover:text-primary transition-colors cursor-pointer">
+              <a [routerLink]="['/repo', repo.repoId]">{{ repo.repoName }} ({{ repo.branch }})</a>
+            </h2>
             <div class="divider my-0"></div>
             
-            <div class="flex flex-col gap-2 mt-2">
-              @for (build of builds[repo]; track build.runId) {
-                <div class="flex justify-between items-center p-2 rounded-lg bg-base-200">
+            <div class="flex flex-col gap-2 mt-2 max-h-[110px] overflow-y-auto pr-2 custom-scrollbar">
+              @for (build of repo.builds; track build.runId) {
+                <div class="flex justify-between items-center p-2 rounded-lg transition-colors"
+                     [ngClass]="build.isAnomaly ? 'bg-error bg-opacity-20 border border-error text-error font-semibold' : 'bg-base-200'">
                   <span class="font-mono text-sm opacity-70">#{{ build.runId }}</span>
                   <span class="badge" [ngClass]="getBadgeClass(build.conclusion)">
                     {{ build.conclusion || build.status }}

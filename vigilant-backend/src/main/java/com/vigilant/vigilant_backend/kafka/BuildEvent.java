@@ -6,5 +6,6 @@ public record BuildEvent(
     Long runId,
     String status,
     String conclusion,
-    Integer durationSeconds
+    Integer durationSeconds,
+    Boolean isAnomaly
 ) {}

@@ -8,10 +8,15 @@ import com.vigilant.vigilant_backend.service.BuildService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.util.HashMap;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import com.vigilant.vigilant_backend.dto.response.RepoBuildsResponse;
+import com.vigilant.vigilant_backend.dto.response.BuildStateResponse;
+
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -21,17 +26,26 @@ public class BuildServiceImpl implements BuildService {
     private final TrackedRepoRepository repoRepository;
 
     @Override
-    public Map<String, List<BuildState>> getRecentBuildsGroupedByRepo() {
-        Map<String, List<BuildState>> recentBuilds = new HashMap<>();
+    public List<RepoBuildsResponse> getRecentBuildsGroupedByRepo() {
+        List<RepoBuildsResponse> recentBuilds = new ArrayList<>();
         List<TrackedRepo> activeRepos = repoRepository.findByIsActiveTrue();
         
         for (TrackedRepo repo : activeRepos) {
             List<BuildState> top5 = buildStateRepository.findTop5ByRepoOrderByRunIdDesc(repo);
-            String displayKey = repo.getRepoName() + " (" + repo.getBranch() + ")";
-            recentBuilds.put(displayKey, top5);
+            List<BuildStateResponse> buildResponses = top5.stream()
+                    .map(BuildStateResponse::fromEntity)
+                    .toList();
+            recentBuilds.add(new RepoBuildsResponse(repo.getId(), repo.getRepoName(), repo.getBranch(), buildResponses));
         }
         
         return recentBuilds;
+    }
+
+    @Override
+    public Page<BuildState> getBuildsForRepo(Long repoId, Pageable pageable) {
+        TrackedRepo repo = repoRepository.findById(repoId)
+                .orElseThrow(() -> new IllegalArgumentException("Repository not found"));
+        return buildStateRepository.findByRepoOrderByRunIdDesc(repo, pageable);
     }
 
     @Override

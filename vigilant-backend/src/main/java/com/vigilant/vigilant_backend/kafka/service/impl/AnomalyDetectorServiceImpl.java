@@ -36,36 +36,53 @@ public class AnomalyDetectorServiceImpl implements AnomalyDetectorService {
         TrackedRepo repo = trackedRepoRepository.findById(event.repoId()).orElse(null);
         if (repo == null) return;
 
+        boolean isAnomaly = false;
         if (event.durationSeconds() != null && event.durationSeconds() > 0) {
-            analyzeBuildMetrics(repo, event);
+            isAnomaly = analyzeBuildMetrics(repo, event);
         }
         
+        BuildEvent finalEvent = new BuildEvent(
+            event.repoId(), event.repoName(), event.runId(), 
+            event.status(), event.conclusion(), event.durationSeconds(), isAnomaly
+        );
+        
         // General Real-time push for UI updates so the frontend doesn't have to poll
-        messagingTemplate.convertAndSend("/topic/builds", event);
+        messagingTemplate.convertAndSend("/topic/builds", finalEvent);
     }
 
     /**
      * Analyzes recent build history to detect anomalies (performance degradation or flaky pipelines).
      * Saves updated metrics to the database and dispatches WebSocket alerts if necessary.
      */
-    private void analyzeBuildMetrics(TrackedRepo repo, BuildEvent event) {
-        List<BuildState> last10Builds = buildStateRepository.findTop10ByRepoOrderByRunIdDesc(repo);
+    private boolean analyzeBuildMetrics(TrackedRepo repo, BuildEvent event) {
+        int limit = repo.getAnomalyWindowSize();
+        List<BuildState> lastBuilds = buildStateRepository.findByRepoOrderByRunIdDesc(repo, org.springframework.data.domain.PageRequest.of(0, limit + 1)).getContent();
         
         // Exclude the current run so it doesn't skew the historical data
-        List<BuildState> historicalBuilds = last10Builds.stream()
+        List<BuildState> historicalBuilds = lastBuilds.stream()
                 .filter(state -> !state.getRunId().equals(event.runId()))
+                .limit(limit)
                 .toList();
 
         double avgDuration = calculateAverageDuration(historicalBuilds);
-        if (avgDuration == 0) return; // Not enough data
+        if (avgDuration == 0) return false; // Not enough data
 
         BuildMetric metric = getOrCreateBuildMetric(repo);
         metric.setAvgDurationLast10(new BigDecimal(avgDuration).setScale(2, RoundingMode.HALF_UP));
 
-        checkPerformanceDegradation(repo, event, avgDuration);
-        checkFlakyPipeline(repo, event, historicalBuilds, metric);
+        boolean isPerfAnomaly = checkPerformanceDegradation(repo, event, avgDuration);
+        boolean isFlakyAnomaly = checkFlakyPipeline(repo, event, historicalBuilds, metric);
+        boolean isAnomaly = isPerfAnomaly || isFlakyAnomaly;
+
+        if (isAnomaly) {
+            buildStateRepository.findByRepoAndRunId(repo, event.runId()).ifPresent(state -> {
+                state.setIsAnomaly(true);
+                buildStateRepository.save(state);
+            });
+        }
 
         buildMetricRepository.save(metric);
+        return isAnomaly;
     }
 
     /**
@@ -84,7 +101,8 @@ public class AnomalyDetectorServiceImpl implements AnomalyDetectorService {
         double sumDuration = 0;
         int count = 0;
         for (BuildState state : builds) {
-            if (state.getDurationSeconds() != null) {
+            // Only include builds that have actually finished in our historical average!
+            if (state.getDurationSeconds() != null && "completed".equalsIgnoreCase(state.getStatus())) {
                 sumDuration += state.getDurationSeconds();
                 count++;
             }
@@ -96,20 +114,18 @@ public class AnomalyDetectorServiceImpl implements AnomalyDetectorService {
      * Detects if the current build is anomalously slow.
      * Alert threshold: Current duration is 50% longer (1.5x) than the historical average.
      */
-    private void checkPerformanceDegradation(TrackedRepo repo, BuildEvent event, double avgDuration) {
-        if (event.durationSeconds() > (avgDuration * 1.5)) {
-            sendAlert("⚠️ Performance Degradation: " + repo.getRepoName() + " build took " + 
-                      event.durationSeconds() + "s (Average is " + String.format("%.2f", avgDuration) + "s)");
-        }
+    private boolean checkPerformanceDegradation(TrackedRepo repo, BuildEvent event, double avgDuration) {
+        double multiplier = repo.getAnomalyMultiplier();
+        return event.durationSeconds() > (avgDuration * multiplier);
     }
 
     /**
      * Detects if the pipeline is repeatedly failing.
      * Looks at the last 5 builds. If there is more than 1 failure and the current build failed, it alerts.
      */
-    private void checkFlakyPipeline(TrackedRepo repo, BuildEvent event, List<BuildState> last10Builds, BuildMetric metric) {
+    private boolean checkFlakyPipeline(TrackedRepo repo, BuildEvent event, List<BuildState> historicalBuilds, BuildMetric metric) {
         int failureCount = 0;
-        for (BuildState state : last10Builds.stream().limit(5).toList()) {
+        for (BuildState state : historicalBuilds.stream().limit(5).toList()) {
             if ("failure".equalsIgnoreCase(state.getConclusion())) {
                 failureCount++;
             }
@@ -117,15 +133,6 @@ public class AnomalyDetectorServiceImpl implements AnomalyDetectorService {
         
         metric.setFailureCountLast5(failureCount);
 
-        if ("failure".equalsIgnoreCase(event.conclusion()) && failureCount > 1) {
-            sendAlert("🚨 Critical: Pipeline Broken for " + repo.getRepoName() + ". Recent failures: " + failureCount);
-        }
-    }
-
-    /**
-     * Dispatches an anomaly alert down the dedicated WebSocket alerts channel.
-     */
-    private void sendAlert(String message) {
-        messagingTemplate.convertAndSend("/topic/alerts", "{\"message\": \"" + message + "\"}");
+        return "failure".equalsIgnoreCase(event.conclusion()) && failureCount > 1;
     }
 }
