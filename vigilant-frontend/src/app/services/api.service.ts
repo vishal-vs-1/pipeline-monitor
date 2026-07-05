@@ -29,4 +29,8 @@ export class ApiService {
   updateRepo(id: number, data: any): Observable<any> {
     return this.http.put(`${this.baseUrl}/repos/${id}`, data);
   }
+
+  deleteRepo(id: number): Observable<any> {
+    return this.http.delete(`${this.baseUrl}/repos/${id}`);
+  }
 }

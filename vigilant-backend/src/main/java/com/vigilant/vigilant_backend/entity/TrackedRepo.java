@@ -19,9 +19,13 @@ public class TrackedRepo {
     @Column(name = "repo_name", nullable = false)
     private String repoName;
 
-    @Column(name = "github_token", nullable = false)
+    @Column(name = "github_token")
     @Convert(converter = com.vigilant.vigilant_backend.config.AttributeEncryptor.class)
     private String githubToken;
+
+    @ManyToOne
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
 
     @Column(name = "branch")
     private String branch = "main";

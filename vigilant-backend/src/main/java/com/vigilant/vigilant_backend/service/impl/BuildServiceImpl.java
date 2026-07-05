@@ -28,7 +28,7 @@ public class BuildServiceImpl implements BuildService {
     @Override
     public List<RepoBuildsResponse> getRecentBuildsGroupedByRepo() {
         List<RepoBuildsResponse> recentBuilds = new ArrayList<>();
-        List<TrackedRepo> activeRepos = repoRepository.findByIsActiveTrue();
+        List<TrackedRepo> activeRepos = repoRepository.findByIsActiveTrueOrderByIdAsc();
         
         for (TrackedRepo repo : activeRepos) {
             List<BuildState> top5 = buildStateRepository.findTop5ByRepoOrderByRunIdDesc(repo);

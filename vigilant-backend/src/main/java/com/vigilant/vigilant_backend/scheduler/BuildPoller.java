@@ -41,10 +41,15 @@ public class BuildPoller {
         Set<Long> currentCycleRunIds = ConcurrentHashMap.newKeySet();
 
         for (TrackedRepo repo : activeRepos) {
+            String token = repo.getGithubToken();
+            if (token == null || token.isBlank()) {
+                token = repo.getUser().getGithubToken();
+            }
+
             List<WorkflowRun> recentRuns = githubService.getRecentRuns(
                     repo.getRepoName(),
                     repo.getBranch(),
-                    repo.getGithubToken());
+                    token);
 
             for (WorkflowRun run : recentRuns) {
                 currentCycleRunIds.add(run.id());

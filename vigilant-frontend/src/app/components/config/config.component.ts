@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { ApiService } from '../../services/api.service';
+import { AuthService } from '../../services/auth.service';
 
 @Component({
   selector: 'app-config',
@@ -15,21 +16,32 @@ export class ConfigComponent implements OnInit {
   repoForm: FormGroup;
   repos: any[] = [];
   editingRepoId: number | null = null;
+  apiErrors: string[] = [];
+  hasGithubToken = false;
 
   constructor(
     private fb: FormBuilder, 
     private apiService: ApiService, 
     private cdr: ChangeDetectorRef,
-    private route: ActivatedRoute
+    private route: ActivatedRoute,
+    private authService: AuthService
   ) {
+    const user = this.authService.currentUserValue;
+    this.hasGithubToken = !!(user && user.githubToken);
+
     this.repoForm = this.fb.group({
       repoName: ['', Validators.required],
-      githubToken: ['', Validators.required],
-      branch: ['main'],
-      anomalyMultiplier: [1.5, [Validators.required, Validators.min(1.2), Validators.max(5.0)]],
-      anomalyWindowSize: [10, [Validators.required, Validators.min(5), Validators.max(20)]],
+      githubToken: [''],
+      branch: ['main', Validators.required],
+      anomalyMultiplier: [1.5, [Validators.required, Validators.min(1.0)]],
+      anomalyWindowSize: [10, [Validators.required, Validators.min(1)]],
       isActive: [true]
     });
+
+    if (!this.hasGithubToken) {
+      this.repoForm.get('githubToken')?.setValidators([Validators.required]);
+      this.repoForm.get('githubToken')?.updateValueAndValidity();
+    }
   }
 
   ngOnInit() {
@@ -60,6 +72,7 @@ export class ConfigComponent implements OnInit {
   }
 
   editRepo(repo: any) {
+    this.apiErrors = [];
     this.editingRepoId = repo.id;
     this.repoForm.patchValue({
       repoName: repo.repoName,
@@ -77,6 +90,7 @@ export class ConfigComponent implements OnInit {
 
   cancelEdit() {
     this.editingRepoId = null;
+    this.apiErrors = [];
     this.repoForm.reset({
       branch: 'main',
       anomalyMultiplier: 1.5,
@@ -88,7 +102,13 @@ export class ConfigComponent implements OnInit {
     this.cdr.detectChanges();
   }
 
+  dismissError() {
+    this.apiErrors = [];
+    this.cdr.detectChanges();
+  }
+
   onSubmit() {
+    this.apiErrors = [];
     if (this.repoForm.valid) {
       if (this.editingRepoId) {
         this.apiService.updateRepo(this.editingRepoId, this.repoForm.value).subscribe({
@@ -99,7 +119,15 @@ export class ConfigComponent implements OnInit {
             }
             this.cancelEdit();
           },
-          error: (err: any) => console.error(err)
+          error: (err: any) => {
+            console.error(err);
+            if (err.error && err.error.errors) {
+              this.apiErrors = err.error.errors;
+            } else {
+              this.apiErrors = ['An unexpected error occurred while updating the repository.'];
+            }
+            this.cdr.detectChanges();
+          }
         });
       } else {
         this.apiService.addRepo(this.repoForm.value).subscribe({
@@ -107,9 +135,36 @@ export class ConfigComponent implements OnInit {
             this.repos.push(res);
             this.cancelEdit();
           },
-          error: (err: any) => console.error(err)
+          error: (err: any) => {
+            console.error(err);
+            if (err.error && err.error.errors) {
+              this.apiErrors = err.error.errors;
+            } else {
+              this.apiErrors = ['An unexpected error occurred while adding the repository.'];
+            }
+            this.cdr.detectChanges();
+          }
         });
       }
+    }
+  }
+
+  deleteRepo(id: number) {
+    this.apiErrors = [];
+    if (confirm('Are you sure you want to delete this repository? This will also delete all associated metrics and states.')) {
+      this.apiService.deleteRepo(id).subscribe({
+        next: () => {
+          this.repos = this.repos.filter(r => r.id !== id);
+          if (this.editingRepoId === id) {
+            this.cancelEdit();
+          }
+          this.cdr.detectChanges();
+        },
+        error: (err: any) => {
+          console.error('Failed to delete repo', err);
+          alert('Failed to delete repository. Check console for details.');
+        }
+      });
     }
   }
 }

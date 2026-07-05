@@ -6,6 +6,7 @@ import com.vigilant.vigilant_backend.service.GithubService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.HttpClientErrorException;
 
 import java.util.List;
 
@@ -46,5 +47,30 @@ public class GithubServiceImpl implements GithubService {
             System.err.println("Error fetching runs for repo " + repoName + ": " + e.getMessage());
         }
         return List.of();
+    }
+
+    @Override
+    public void validateRepoAndToken(String repoName, String branch, String token) {
+        String[] parts = repoName.split("/");
+        if (parts.length != 2) {
+            throw new IllegalArgumentException("Invalid repository name format. Expected 'owner/repo', got: " + repoName);
+        }
+        String owner = parts[0];
+        String repo = parts[1];
+
+        try {
+            // Check if the repo exists and the token has access
+            restClient.get()
+                    .uri("/repos/{owner}/{repo}", owner, repo)
+                    .header("Authorization", "Bearer " + token)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (HttpClientErrorException.Unauthorized e) {
+            throw new IllegalArgumentException("Invalid GitHub token. Unauthorized access.");
+        } catch (HttpClientErrorException.NotFound e) {
+            throw new IllegalArgumentException("GitHub repository not found or token lacks permissions: " + repoName);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Failed to validate GitHub credentials: " + e.getMessage());
+        }
     }
 }

@@ -1,0 +1,70 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: vigilant-db
+    environment:
+      POSTGRES_USER: vigilant
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: vigilant
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  kafka:
+    image: apache/kafka:latest
+    container_name: vigilant-kafka
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      CLUSTER_ID: "Mk3OEYBSD34fcwNTJENDM2Qk"
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka_data:/bitnami/kafka
+    restart: unless-stopped
+
+  backend:
+    build: 
+      context: ./vigilant-backend
+      dockerfile: Dockerfile
+    container_name: vigilant-backend
+    environment:
+      # Pointing to the 'db' service container
+      - DB_URL=jdbc:postgresql://db:5432/vigilant
+      - DB_USERNAME=vigilant
+      - DB_PASSWORD=password
+      # Ensure you change this in a real production environment
+      - ENCRYPTION_SECRET_KEY=12345678901234567890123456789012
+      # Pointing to the 'kafka' service container
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+      - kafka
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./vigilant-frontend
+      dockerfile: Dockerfile
+    container_name: vigilant-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  db_data:
+  kafka_data:

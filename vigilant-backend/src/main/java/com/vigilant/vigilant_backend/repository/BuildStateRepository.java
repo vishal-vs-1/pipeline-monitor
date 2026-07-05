@@ -15,4 +15,5 @@ public interface BuildStateRepository extends JpaRepository<BuildState, Long> {
     List<BuildState> findTop5ByRepoOrderByRunIdDesc(TrackedRepo repo);
     List<BuildState> findTop10ByRepoOrderByRunIdDesc(TrackedRepo repo);
     Page<BuildState> findByRepoOrderByRunIdDesc(TrackedRepo repo, Pageable pageable);
+    void deleteByRepo(TrackedRepo repo);
 }

@@ -11,7 +11,6 @@ public record AddRepoRequest(
     @Pattern(regexp = "^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$", message = "{validation.repo.name.pattern}")
     String repoName,
 
-    @NotBlank(message = "{validation.github.token.required}")
     String githubToken,
 
     @NotBlank(message = "{validation.branch.required}")
