@@ -24,6 +24,11 @@ public class GithubServiceImpl implements GithubService {
 
     @Override
     public List<WorkflowRun> getRecentRuns(String repoName, String branch, String token) {
+        return getRecentRuns(repoName, branch, token, 5);
+    }
+
+    @Override
+    public List<WorkflowRun> getRecentRuns(String repoName, String branch, String token, int perPage) {
         try {
             String[] parts = repoName.split("/");
             if (parts.length != 2) {
@@ -34,7 +39,7 @@ public class GithubServiceImpl implements GithubService {
             String repo = parts[1];
 
             WorkflowRunsResponse response = restClient.get()
-                    .uri("/repos/{owner}/{repo}/actions/runs?branch={branch}&per_page=5", owner, repo, branch)
+                    .uri("/repos/{owner}/{repo}/actions/runs?branch={branch}&per_page={perPage}", owner, repo, branch, perPage)
                     .header("Authorization", "Bearer " + token)
                     .retrieve()
                     .body(WorkflowRunsResponse.class);
@@ -43,7 +48,6 @@ public class GithubServiceImpl implements GithubService {
                 return response.workflowRuns();
             }
         } catch (Exception e) {
-            // Log error
             System.err.println("Error fetching runs for repo " + repoName + ": " + e.getMessage());
         }
         return List.of();

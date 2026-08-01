@@ -17,6 +17,9 @@ export class WebsocketService {
   constructor() {
     this.client = new Client({
       webSocketFactory: () => new SockJS('http://localhost:8080/ws'),
+      connectHeaders: {
+        Authorization: `Bearer ${localStorage.getItem('token')}`
+      },
       debug: (str) => {
         console.log(str);
       },
@@ -27,12 +30,12 @@ export class WebsocketService {
 
     this.client.onConnect = (frame) => {
       console.log('Connected: ' + frame);
-      this.client.subscribe('/topic/builds', (message) => {
+      this.client.subscribe('/user/queue/builds', (message) => {
         if (message.body) {
           this.buildSubject.next(JSON.parse(message.body));
         }
       });
-      this.client.subscribe('/topic/alerts', (message) => {
+      this.client.subscribe('/user/queue/alerts', (message) => {
         if (message.body) {
           this.alertSubject.next(JSON.parse(message.body));
         }

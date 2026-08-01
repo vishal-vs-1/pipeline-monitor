@@ -12,10 +12,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -27,81 +29,119 @@ public class AnomalyDetectorServiceImpl implements AnomalyDetectorService {
     private final SimpMessagingTemplate messagingTemplate;
 
     /**
-     * Kafka Listener that consumes BuildEvents emitted by the BuildPoller.
+     * Kafka Listener that consumes batches of BuildEvents emitted by the BuildPoller.
      * It runs anomaly detection algorithms and broadcasts the event to the UI via WebSockets.
      */
     @Override
-    @KafkaListener(topics = "build-events", groupId = "vigilant-group")
-    public void consumeBuildEvent(BuildEvent event) {
-        TrackedRepo repo = trackedRepoRepository.findById(event.repoId()).orElse(null);
-        if (repo == null) return;
+    @KafkaListener(topics = "build-events", groupId = "vigilant-group", containerFactory = "kafkaListenerContainerFactory")
+    @Transactional
+    public void consumeBuildEvents(List<BuildEvent> events) {
+        if (events == null || events.isEmpty()) return;
 
-        boolean isAnomaly = false;
-        if (event.durationSeconds() != null && event.durationSeconds() > 0) {
-            isAnomaly = analyzeBuildMetrics(repo, event);
+        // Grouping events chronologically if there are multiple for the same runId doesn't strictly matter here 
+        // as long as we process them. We'll iterate in the order received.
+        Set<Long> repoIds = events.stream().map(BuildEvent::repoId).collect(Collectors.toSet());
+        Map<Long, TrackedRepo> repos = trackedRepoRepository.findAllById(repoIds).stream()
+                .collect(Collectors.toMap(TrackedRepo::getId, r -> r));
+
+        Set<Long> runIds = events.stream().map(BuildEvent::runId).collect(Collectors.toSet());
+        Map<Long, BuildState> existingStates = buildStateRepository.findByRunIdIn(runIds).stream()
+                .collect(Collectors.toMap(BuildState::getRunId, s -> s));
+
+        List<BuildState> statesToSave = new ArrayList<>();
+        Map<Long, BuildMetric> metricsToSave = new HashMap<>();
+
+        for (BuildEvent event : events) {
+            TrackedRepo repo = repos.get(event.repoId());
+            if (repo == null) continue;
+
+            BuildState existing = existingStates.get(event.runId());
+            
+            // Idempotency: skip if we have this exact event state processed already
+            if (existing != null && 
+                String.valueOf(existing.getStatus()).equals(String.valueOf(event.status())) &&
+                String.valueOf(existing.getConclusion()).equals(String.valueOf(event.conclusion())) &&
+                Objects.equals(existing.getDurationSeconds(), event.durationSeconds())) {
+                continue;
+            }
+
+            boolean isAnomaly = false;
+            if (event.durationSeconds() != null && event.durationSeconds() > 0) {
+                // To avoid N+1, ideally we'd batch fetch historical data, but window sizes vary. 
+                // We'll leave the historical fetch per anomaly check for now.
+                isAnomaly = analyzeBuildMetrics(repo, event, metricsToSave);
+            }
+            
+            BuildEvent finalEvent = new BuildEvent(
+                event.repoId(), event.repoName(), event.runId(), 
+                event.status(), event.conclusion(), event.durationSeconds(), isAnomaly
+            );
+            
+            // User-scoped broadcast
+            String userEmail = repo.getUser().getEmail();
+            messagingTemplate.convertAndSendToUser(userEmail, "/queue/builds", finalEvent);
+            if (isAnomaly) {
+                messagingTemplate.convertAndSendToUser(userEmail, "/queue/alerts", finalEvent);
+            }
+            
+            if (existing == null) {
+                existing = new BuildState();
+                existing.setRunId(event.runId());
+                existing.setRepo(repo);
+                existingStates.put(event.runId(), existing); // Cache for subsequent events in batch
+            }
+            
+            existing.setStatus(event.status());
+            existing.setConclusion(event.conclusion());
+            existing.setDurationSeconds(event.durationSeconds());
+            if (isAnomaly) {
+                existing.setIsAnomaly(true);
+            }
+            
+            statesToSave.add(existing);
         }
-        
-        BuildEvent finalEvent = new BuildEvent(
-            event.repoId(), event.repoName(), event.runId(), 
-            event.status(), event.conclusion(), event.durationSeconds(), isAnomaly
-        );
-        
-        // General Real-time push for UI updates so the frontend doesn't have to poll
-        messagingTemplate.convertAndSend("/topic/builds", finalEvent);
+
+        if (!statesToSave.isEmpty()) {
+            buildStateRepository.saveAll(statesToSave);
+        }
+        if (!metricsToSave.isEmpty()) {
+            buildMetricRepository.saveAll(metricsToSave.values());
+        }
     }
 
-    /**
-     * Analyzes recent build history to detect anomalies (performance degradation or flaky pipelines).
-     * Saves updated metrics to the database and dispatches WebSocket alerts if necessary.
-     */
-    private boolean analyzeBuildMetrics(TrackedRepo repo, BuildEvent event) {
+    private boolean analyzeBuildMetrics(TrackedRepo repo, BuildEvent event, Map<Long, BuildMetric> metricsToSave) {
         int limit = repo.getAnomalyWindowSize();
         List<BuildState> lastBuilds = buildStateRepository.findByRepoOrderByRunIdDesc(repo, org.springframework.data.domain.PageRequest.of(0, limit + 1)).getContent();
         
-        // Exclude the current run so it doesn't skew the historical data
         List<BuildState> historicalBuilds = lastBuilds.stream()
                 .filter(state -> !state.getRunId().equals(event.runId()))
                 .limit(limit)
                 .toList();
 
         double avgDuration = calculateAverageDuration(historicalBuilds);
-        if (avgDuration == 0) return false; // Not enough data
+        if (avgDuration == 0) return false;
 
-        BuildMetric metric = getOrCreateBuildMetric(repo);
+        BuildMetric metric = metricsToSave.getOrDefault(repo.getId(), getOrCreateBuildMetric(repo));
         metric.setAvgDurationLast10(new BigDecimal(avgDuration).setScale(2, RoundingMode.HALF_UP));
 
         boolean isPerfAnomaly = checkPerformanceDegradation(repo, event, avgDuration);
         boolean isFlakyAnomaly = checkFlakyPipeline(repo, event, historicalBuilds, metric);
-        boolean isAnomaly = isPerfAnomaly || isFlakyAnomaly;
-
-        if (isAnomaly) {
-            buildStateRepository.findByRepoAndRunId(repo, event.runId()).ifPresent(state -> {
-                state.setIsAnomaly(true);
-                buildStateRepository.save(state);
-            });
-        }
-
-        buildMetricRepository.save(metric);
-        return isAnomaly;
+        
+        metricsToSave.put(repo.getId(), metric);
+        
+        return isPerfAnomaly || isFlakyAnomaly;
     }
 
-    /**
-     * Retrieves existing build metrics for a repo or initializes a new one.
-     */
     private BuildMetric getOrCreateBuildMetric(TrackedRepo repo) {
         BuildMetric metric = buildMetricRepository.findById(repo.getId()).orElse(new BuildMetric());
         metric.setRepoId(repo.getId());
         return metric;
     }
 
-    /**
-     * Calculates the average duration in seconds of the provided builds.
-     */
     private double calculateAverageDuration(List<BuildState> builds) {
         double sumDuration = 0;
         int count = 0;
         for (BuildState state : builds) {
-            // Only include builds that have actually finished in our historical average!
             if (state.getDurationSeconds() != null && "completed".equalsIgnoreCase(state.getStatus())) {
                 sumDuration += state.getDurationSeconds();
                 count++;
@@ -110,19 +150,11 @@ public class AnomalyDetectorServiceImpl implements AnomalyDetectorService {
         return count > 0 ? sumDuration / count : 0;
     }
 
-    /**
-     * Detects if the current build is anomalously slow.
-     * Alert threshold: Current duration is 50% longer (1.5x) than the historical average.
-     */
     private boolean checkPerformanceDegradation(TrackedRepo repo, BuildEvent event, double avgDuration) {
         double multiplier = repo.getAnomalyMultiplier();
         return event.durationSeconds() > (avgDuration * multiplier);
     }
 
-    /**
-     * Detects if the pipeline is repeatedly failing.
-     * Looks at the last 5 builds. If there is more than 1 failure and the current build failed, it alerts.
-     */
     private boolean checkFlakyPipeline(TrackedRepo repo, BuildEvent event, List<BuildState> historicalBuilds, BuildMetric metric) {
         int failureCount = 0;
         for (BuildState state : historicalBuilds.stream().limit(5).toList()) {
@@ -130,9 +162,7 @@ public class AnomalyDetectorServiceImpl implements AnomalyDetectorService {
                 failureCount++;
             }
         }
-        
         metric.setFailureCountLast5(failureCount);
-
         return "failure".equalsIgnoreCase(event.conclusion()) && failureCount > 1;
     }
 }

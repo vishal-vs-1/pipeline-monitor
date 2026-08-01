@@ -11,6 +11,10 @@ import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
 
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClientService;
+import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
+
 import java.io.IOException;
 import java.util.Optional;
 
@@ -20,10 +24,12 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
 
     private final JwtTokenProvider tokenProvider;
     private final UserRepository userRepository;
+    private final OAuth2AuthorizedClientService authorizedClientService;
 
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException, ServletException {
-        OAuth2User oAuth2User = (OAuth2User) authentication.getPrincipal();
+        OAuth2AuthenticationToken oauthToken = (OAuth2AuthenticationToken) authentication;
+        OAuth2User oAuth2User = oauthToken.getPrincipal();
         String email = oAuth2User.getAttribute("email");
         String name = oAuth2User.getAttribute("name");
 
@@ -31,6 +37,10 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
             response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Email not found from OAuth2 provider");
             return;
         }
+
+        OAuth2AuthorizedClient client = authorizedClientService.loadAuthorizedClient(
+                oauthToken.getAuthorizedClientRegistrationId(),
+                oauthToken.getName());
 
         Optional<User> userOptional = userRepository.findByEmail(email);
         User user;
@@ -40,9 +50,18 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
             user = new User();
             user.setEmail(email);
             user.setName(name);
-            user.setProvider("oauth2");
-            userRepository.save(user);
+            user.setProvider(oauthToken.getAuthorizedClientRegistrationId());
         }
+
+        if (client != null && client.getAccessToken() != null) {
+            user.setGithubToken(client.getAccessToken().getTokenValue());
+            user.setProviderTokenExpiresAt(client.getAccessToken().getExpiresAt());
+            if (client.getRefreshToken() != null) {
+                user.setProviderRefreshToken(client.getRefreshToken().getTokenValue());
+            }
+        }
+
+        userRepository.save(user);
 
         String token = tokenProvider.generateAccessToken(user.getEmail());
         String refreshToken = tokenProvider.generateRefreshToken(user.getEmail());

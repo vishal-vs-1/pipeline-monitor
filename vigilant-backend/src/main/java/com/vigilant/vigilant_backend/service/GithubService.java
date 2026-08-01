@@ -6,5 +6,6 @@ import java.util.List;
 
 public interface GithubService {
     List<WorkflowRun> getRecentRuns(String repoName, String branch, String token);
+    List<WorkflowRun> getRecentRuns(String repoName, String branch, String token, int perPage);
     void validateRepoAndToken(String repoName, String branch, String token);
 }

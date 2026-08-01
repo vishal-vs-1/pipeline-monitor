@@ -7,17 +7,21 @@ import com.vigilant.vigilant_backend.kafka.BuildEvent;
 import com.vigilant.vigilant_backend.service.BuildService;
 import com.vigilant.vigilant_backend.service.RepoService;
 import com.vigilant.vigilant_backend.service.GithubService;
+import com.vigilant.vigilant_backend.service.WebSocketPresenceService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class BuildPoller {
@@ -26,9 +30,10 @@ public class BuildPoller {
     private final BuildService buildService;
     private final GithubService githubService;
     private final KafkaTemplate<String, BuildEvent> kafkaTemplate;
+    private final WebSocketPresenceService presenceService;
 
-    // Memory cache of runs we already know are completed to save DB queries
-    private final Set<Long> knownCompletedRuns = ConcurrentHashMap.newKeySet();
+    // Memory cache of runs we already know are completed, scoped per user email
+    private final Map<String, Set<Long>> knownCompletedRuns = new ConcurrentHashMap<>();
 
     /**
      * Scheduled job that periodically polls GitHub for the latest workflow runs
@@ -37,26 +42,52 @@ public class BuildPoller {
      */
     @Scheduled(fixedDelayString = "${poller.delay}")
     public void pollRepositories() {
-        List<TrackedRepo> activeRepos = repoService.getActiveRepos();
+        Set<String> onlineUsers = presenceService.getOnlineUserEmails();
+        if (onlineUsers.isEmpty()) {
+            log.info("0 online users. Skipping poll cycle.");
+            return;
+        }
+
+        // Users who just came online need a bigger fetch to backfill missed builds
+        Set<String> newUsers = presenceService.consumeNewlyConnectedUsers();
+
+        List<TrackedRepo> activeRepos = repoService.getActiveReposByUserEmails(onlineUsers);
         Set<Long> currentCycleRunIds = ConcurrentHashMap.newKeySet();
+
+        // Track current cycle run IDs per user for cleanup
+        Map<String, Set<Long>> currentCycleRunIdsByUser = new ConcurrentHashMap<>();
 
         for (TrackedRepo repo : activeRepos) {
             String token = repo.getUser().getGithubToken();
+            String userEmail = repo.getUser().getEmail();
+
+            // Backfill: 30 runs for new users, 5 for already-polling users
+            int perPage = newUsers.contains(userEmail) ? 30 : 5;
 
             List<WorkflowRun> recentRuns = githubService.getRecentRuns(
                     repo.getRepoName(),
                     repo.getBranch(),
-                    token);
+                    token,
+                    perPage);
+
+            Set<Long> userCycleRunIds = currentCycleRunIdsByUser
+                    .computeIfAbsent(userEmail, k -> ConcurrentHashMap.newKeySet());
 
             for (WorkflowRun run : recentRuns) {
-                currentCycleRunIds.add(run.id());
-                processWorkflowRun(repo, run);
+                userCycleRunIds.add(run.id());
+                processWorkflowRun(repo, run, userEmail);
             }
         }
 
-        // Prevent memory leak by removing any runIds that are no longer in the recent
-        // runs from GitHub
-        knownCompletedRuns.retainAll(currentCycleRunIds);
+        // Prevent memory leak: retain only run IDs from the current cycle per user
+        for (Map.Entry<String, Set<Long>> entry : currentCycleRunIdsByUser.entrySet()) {
+            Set<Long> userCache = knownCompletedRuns.get(entry.getKey());
+            if (userCache != null) {
+                userCache.retainAll(entry.getValue());
+            }
+        }
+        // Evict cache for users who went offline mid-cycle
+        knownCompletedRuns.keySet().retainAll(onlineUsers);
     }
 
     /**
@@ -64,10 +95,11 @@ public class BuildPoller {
      * Calculates duration and delegates to state handler methods based on whether
      * this build run has been seen before in the database.
      */
-    private void processWorkflowRun(TrackedRepo repo, WorkflowRun latestRun) {
+    private void processWorkflowRun(TrackedRepo repo, WorkflowRun latestRun, String userEmail) {
         // If we already verified this run is completed in previous cycles, completely
         // ignore it!
-        if (knownCompletedRuns.contains(latestRun.id())) {
+        Set<Long> userCache = knownCompletedRuns.get(userEmail);
+        if (userCache != null && userCache.contains(latestRun.id())) {
             return;
         }
 
@@ -75,9 +107,9 @@ public class BuildPoller {
         Integer durationSeconds = calculateDuration(latestRun);
 
         if (existingStateOpt.isEmpty()) {
-            handleNewBuildState(repo, latestRun, durationSeconds);
+            handleNewBuildState(repo, latestRun, durationSeconds, userEmail);
         } else {
-            handleExistingBuildState(repo, latestRun, durationSeconds, existingStateOpt.get());
+            handleExistingBuildState(repo, latestRun, durationSeconds, existingStateOpt.get(), userEmail);
         }
     }
 
@@ -95,7 +127,7 @@ public class BuildPoller {
      * Handles the case where a completely new workflow run is detected.
      * Saves it to the database and immediately fires a Kafka event.
      */
-    private void handleNewBuildState(TrackedRepo repo, WorkflowRun latestRun, Integer durationSeconds) {
+    private void handleNewBuildState(TrackedRepo repo, WorkflowRun latestRun, Integer durationSeconds, String userEmail) {
         BuildState newState = new BuildState();
         newState.setRepo(repo);
         newState.setRunId(latestRun.id());
@@ -107,7 +139,7 @@ public class BuildPoller {
         publishEvent(repo, latestRun, durationSeconds);
 
         if ("completed".equalsIgnoreCase(latestRun.status())) {
-            knownCompletedRuns.add(latestRun.id());
+            knownCompletedRuns.computeIfAbsent(userEmail, k -> ConcurrentHashMap.newKeySet()).add(latestRun.id());
         }
     }
 
@@ -118,7 +150,7 @@ public class BuildPoller {
      * a Kafka event.
      */
     private void handleExistingBuildState(TrackedRepo repo, WorkflowRun latestRun, Integer durationSeconds,
-            BuildState existingState) {
+            BuildState existingState, String userEmail) {
         boolean statusChanged = !String.valueOf(existingState.getStatus()).equals(String.valueOf(latestRun.status()));
         boolean conclusionChanged = !String.valueOf(existingState.getConclusion())
                 .equals(String.valueOf(latestRun.conclusion()));
@@ -139,7 +171,7 @@ public class BuildPoller {
         }
 
         if ("completed".equalsIgnoreCase(latestRun.status())) {
-            knownCompletedRuns.add(latestRun.id());
+            knownCompletedRuns.computeIfAbsent(userEmail, k -> ConcurrentHashMap.newKeySet()).add(latestRun.id());
         }
     }
 

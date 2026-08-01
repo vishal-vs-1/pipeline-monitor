@@ -9,6 +9,7 @@ import java.util.List;
 public interface RepoService {
     List<TrackedRepo> getAllRepos(User user);
     List<TrackedRepo> getActiveRepos();
+    List<TrackedRepo> getActiveReposByUserEmails(java.util.Set<String> emails);
     TrackedRepo addRepo(TrackedRepo repo, User user);
     TrackedRepo updateRepo(Long id, UpdateRepoRequest request, User user);
     TrackedRepo findById(Long id, User user);

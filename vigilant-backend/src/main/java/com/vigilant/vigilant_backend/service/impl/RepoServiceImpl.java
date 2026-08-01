@@ -36,6 +36,14 @@ public class RepoServiceImpl implements RepoService {
     }
 
     @Override
+    public List<TrackedRepo> getActiveReposByUserEmails(java.util.Set<String> emails) {
+        if (emails == null || emails.isEmpty()) {
+            return java.util.Collections.emptyList();
+        }
+        return repoRepository.findByIsActiveTrueAndUserEmailIn(emails);
+    }
+
+    @Override
     public TrackedRepo addRepo(TrackedRepo repo, User user) {
         repo.setUser(user);
         

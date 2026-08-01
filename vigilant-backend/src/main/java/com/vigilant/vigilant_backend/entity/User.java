@@ -28,5 +28,11 @@ public class User {
 
     private String providerId;
 
+    @Convert(converter = com.vigilant.vigilant_backend.config.AttributeEncryptor.class)
     private String githubToken;
+
+    @Convert(converter = com.vigilant.vigilant_backend.config.AttributeEncryptor.class)
+    private String providerRefreshToken;
+
+    private java.time.Instant providerTokenExpiresAt;
 }

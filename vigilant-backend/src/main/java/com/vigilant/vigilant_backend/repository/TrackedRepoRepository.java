@@ -11,5 +11,6 @@ public interface TrackedRepoRepository extends JpaRepository<TrackedRepo, Long> 
     List<TrackedRepo> findByIsActiveTrue();
     List<TrackedRepo> findByIsActiveTrueOrderByIdAsc();
     List<TrackedRepo> findByUserOrderByIdAsc(User user);
+    List<TrackedRepo> findByIsActiveTrueAndUserEmailIn(java.util.Set<String> emails);
     Optional<TrackedRepo> findByIdAndUser(Long id, User user);
 }
