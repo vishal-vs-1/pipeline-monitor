@@ -39,12 +39,9 @@ public class RepoServiceImpl implements RepoService {
     public TrackedRepo addRepo(TrackedRepo repo, User user) {
         repo.setUser(user);
         
-        String tokenToUse = repo.getGithubToken();
+        String tokenToUse = user.getGithubToken();
         if (tokenToUse == null || tokenToUse.isBlank()) {
-            tokenToUse = user.getGithubToken();
-        }
-        if (tokenToUse == null || tokenToUse.isBlank()) {
-            throw new IllegalArgumentException("GitHub token is required. Provide it in the request or set it in your profile.");
+            throw new IllegalArgumentException("GitHub token is required. Please link your GitHub account or set a token in your profile.");
         }
         
         githubService.validateRepoAndToken(repo.getRepoName(), repo.getBranch(), tokenToUse);
@@ -57,13 +54,7 @@ public class RepoServiceImpl implements RepoService {
         TrackedRepo existing = repoRepository.findByIdAndUser(id, user)
                 .orElseThrow(() -> new RuntimeException("Repository not found with id: " + id));
 
-        String tokenToValidate = existing.getGithubToken();
-        if (request.githubToken() != null && !request.githubToken().isBlank()) {
-            tokenToValidate = request.githubToken();
-        }
-        if (tokenToValidate == null || tokenToValidate.isBlank()) {
-            tokenToValidate = user.getGithubToken();
-        }
+        String tokenToValidate = user.getGithubToken();
         if (tokenToValidate == null || tokenToValidate.isBlank()) {
             throw new IllegalArgumentException("GitHub token is required.");
         }
@@ -74,9 +65,6 @@ public class RepoServiceImpl implements RepoService {
         existing.setBranch(request.branch());
         existing.setIsActive(request.isActive());
 
-        if (request.githubToken() != null && !request.githubToken().isBlank()) {
-            existing.setGithubToken(request.githubToken());
-        }
         if (request.anomalyMultiplier() != null) {
             existing.setAnomalyMultiplier(request.anomalyMultiplier());
         }

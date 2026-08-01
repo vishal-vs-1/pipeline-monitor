@@ -34,6 +34,7 @@ public class JwtTokenProvider {
     public String generateAccessToken(String email) {
         return Jwts.builder()
                 .subject(email)
+                .claim("type", "access")
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + accessTokenValidity))
                 .signWith(key)
@@ -43,6 +44,7 @@ public class JwtTokenProvider {
     public String generateRefreshToken(String email) {
         return Jwts.builder()
                 .subject(email)
+                .claim("type", "refresh")
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + refreshTokenValidity))
                 .signWith(key)
@@ -58,10 +60,24 @@ public class JwtTokenProvider {
         return claims.getSubject();
     }
 
-    public boolean validateToken(String token) {
+    public boolean validateAccessToken(String token) {
+        return validateTokenWithType(token, "access");
+    }
+
+    public boolean validateRefreshToken(String token) {
+        return validateTokenWithType(token, "refresh");
+    }
+
+    private boolean validateTokenWithType(String token, String expectedType) {
         try {
-            Jwts.parser().verifyWith(key).build().parseSignedClaims(token);
-            return true;
+            Claims claims = Jwts.parser()
+                    .verifyWith(key)
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
+            
+            String tokenType = claims.get("type", String.class);
+            return expectedType.equals(tokenType);
         } catch (JwtException | IllegalArgumentException e) {
             return false;
         }

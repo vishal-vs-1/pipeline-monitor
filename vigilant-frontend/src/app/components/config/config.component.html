@@ -30,25 +30,10 @@
             <input type="text" formControlName="repoName" placeholder="e.g., vishal-vs-1/pipeline-monitor" class="input input-bordered w-full" />
           </div>
 
-          @if (!hasGithubToken) {
-            <div class="form-control">
-              <label class="label">
-                <span class="label-text font-semibold">GitHub Token</span>
-                <span class="label-text-alt text-base-content/70">Requires 'repo' scope</span>
-              </label>
-              <input type="password" formControlName="githubToken" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" class="input input-bordered w-full" />
-              @if (editingRepoId) {
-                <label class="label">
-                  <span class="label-text-alt text-warning">Leave empty to keep existing token</span>
-                </label>
-              }
-            </div>
-          } @else {
-            <div class="alert alert-info shadow-sm">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-              <span>Using your connected GitHub account for API access.</span>
-            </div>
-          }
+          <div class="alert alert-info shadow-sm">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <span>GitHub API access is managed via your account settings.</span>
+          </div>
 
           <div class="flex gap-4">
             <label class="form-control w-full">

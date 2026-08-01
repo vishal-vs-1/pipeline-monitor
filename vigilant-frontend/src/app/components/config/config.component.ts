@@ -3,7 +3,6 @@ import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { ApiService } from '../../services/api.service';
-import { AuthService } from '../../services/auth.service';
 
 @Component({
   selector: 'app-config',
@@ -17,31 +16,20 @@ export class ConfigComponent implements OnInit {
   repos: any[] = [];
   editingRepoId: number | null = null;
   apiErrors: string[] = [];
-  hasGithubToken = false;
 
   constructor(
     private fb: FormBuilder, 
     private apiService: ApiService, 
     private cdr: ChangeDetectorRef,
-    private route: ActivatedRoute,
-    private authService: AuthService
+    private route: ActivatedRoute
   ) {
-    const user = this.authService.currentUserValue;
-    this.hasGithubToken = !!(user && user.githubToken);
-
     this.repoForm = this.fb.group({
       repoName: ['', Validators.required],
-      githubToken: [''],
       branch: ['main', Validators.required],
       anomalyMultiplier: [1.5, [Validators.required, Validators.min(1.0)]],
       anomalyWindowSize: [10, [Validators.required, Validators.min(1)]],
       isActive: [true]
     });
-
-    if (!this.hasGithubToken) {
-      this.repoForm.get('githubToken')?.setValidators([Validators.required]);
-      this.repoForm.get('githubToken')?.updateValueAndValidity();
-    }
   }
 
   ngOnInit() {
@@ -76,15 +64,11 @@ export class ConfigComponent implements OnInit {
     this.editingRepoId = repo.id;
     this.repoForm.patchValue({
       repoName: repo.repoName,
-      githubToken: '', // Keep empty so we don't accidentally send a dummy token
       branch: repo.branch,
       anomalyMultiplier: repo.anomalyMultiplier,
       anomalyWindowSize: repo.anomalyWindowSize,
       isActive: repo.isActive
     });
-    // githubToken is optional during update
-    this.repoForm.get('githubToken')?.clearValidators();
-    this.repoForm.get('githubToken')?.updateValueAndValidity();
     this.cdr.detectChanges();
   }
 
@@ -97,8 +81,6 @@ export class ConfigComponent implements OnInit {
       anomalyWindowSize: 10,
       isActive: true
     });
-    this.repoForm.get('githubToken')?.setValidators([Validators.required]);
-    this.repoForm.get('githubToken')?.updateValueAndValidity();
     this.cdr.detectChanges();
   }
 

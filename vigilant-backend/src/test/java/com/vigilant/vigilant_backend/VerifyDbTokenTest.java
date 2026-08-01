@@ -1,7 +1,7 @@
 package com.vigilant.vigilant_backend;
 
-import com.vigilant.vigilant_backend.entity.TrackedRepo;
-import com.vigilant.vigilant_backend.repository.TrackedRepoRepository;
+import com.vigilant.vigilant_backend.entity.User;
+import com.vigilant.vigilant_backend.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -12,17 +12,22 @@ import java.util.List;
 public class VerifyDbTokenTest {
 
     @Autowired
-    private TrackedRepoRepository repoRepository;
+    private UserRepository userRepository;
 
     @Test
     public void testTokens() {
-        List<TrackedRepo> repos = repoRepository.findAll();
-        for (TrackedRepo repo : repos) {
+        List<User> users = userRepository.findAll();
+        for (User user : users) {
             System.out.println("=========================================");
-            System.out.println("Repo ID: " + repo.getId());
-            System.out.println("Repo Name: " + repo.getRepoName());
-            System.out.println("Decrypted Token: " + repo.getGithubToken().substring(0, Math.min(10, repo.getGithubToken().length())) + "...");
-            System.out.println("Decrypted Token Length: " + repo.getGithubToken().length());
+            System.out.println("User ID: " + user.getId());
+            System.out.println("User Email: " + user.getEmail());
+            String token = user.getGithubToken();
+            if (token != null && !token.isBlank()) {
+                System.out.println("GitHub Token: " + token.substring(0, Math.min(10, token.length())) + "...");
+                System.out.println("Token Length: " + token.length());
+            } else {
+                System.out.println("GitHub Token: (none)");
+            }
             System.out.println("=========================================");
         }
     }

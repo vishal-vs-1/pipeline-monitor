@@ -11,7 +11,6 @@ public record AddRepoRequest(
     @Pattern(regexp = "^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$", message = "{validation.repo.name.pattern}")
     String repoName,
 
-    String githubToken,
 
     @NotBlank(message = "{validation.branch.required}")
     @Pattern(regexp = "^[a-zA-Z0-9_.-]+$", message = "{validation.branch.pattern}")
@@ -28,7 +27,6 @@ public record AddRepoRequest(
     public TrackedRepo toEntity() {
         TrackedRepo repo = new TrackedRepo();
         repo.setRepoName(this.repoName());
-        repo.setGithubToken(this.githubToken());
         repo.setBranch(this.branch());
         
         if (this.anomalyMultiplier() != null) {

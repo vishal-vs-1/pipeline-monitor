@@ -64,7 +64,7 @@ public class AuthController {
 
     @PostMapping("/refresh")
     public ResponseEntity<AuthResponse> refresh(@Valid @RequestBody RefreshTokenRequest request) {
-        if (tokenProvider.validateToken(request.refreshToken())) {
+        if (tokenProvider.validateRefreshToken(request.refreshToken())) {
             String email = tokenProvider.getEmailFromToken(request.refreshToken());
             User user = userRepository.findByEmail(email).orElseThrow();
             String accessToken = tokenProvider.generateAccessToken(user.getEmail());

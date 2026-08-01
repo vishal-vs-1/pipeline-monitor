@@ -9,7 +9,6 @@ import jakarta.validation.constraints.NotNull;
 public record UpdateRepoRequest(
         @NotBlank(message = "{validation.repo.name.required}") @Pattern(regexp = "^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$", message = "{validation.repo.name.pattern}") String repoName,
 
-        String githubToken, // Optional during update
 
         @NotBlank(message = "{validation.branch.required}") @Pattern(regexp = "^[a-zA-Z0-9_.-]+$", message = "{validation.branch.pattern}") String branch,
 

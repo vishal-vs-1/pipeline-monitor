@@ -6,6 +6,18 @@ spring:
     import: optional:file:.env[.properties]
   application:
     name: vigilant-backend
+  security:
+    oauth2:
+      client:
+        registration:
+          github:
+            client-id: ${GITHUB_CLIENT_ID}
+            client-secret: ${GITHUB_CLIENT_SECRET}
+            scope: read:user,user:email
+          google:
+            client-id: ${GOOGLE_CLIENT_ID}
+            client-secret: ${GOOGLE_CLIENT_SECRET}
+            scope: profile,email
   datasource:
     url: ${DB_URL}
     username: ${DB_USERNAME}
